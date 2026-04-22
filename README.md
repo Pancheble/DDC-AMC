@@ -62,7 +62,7 @@ Let $x(t) = I(t) + jQ(t)$ denote a received complex baseband signal consisting o
 **Constellation Diagram.**
 The complex IQ samples are rendered as a 2D histogram in the IQ plane:
 
-$$\mathbf{C} = \operatorname{hist2d}\!\left(\{(I_n,\, Q_n)\}_{n=1}^{N}\right) \in \mathbb{R}^{H \times W}$$
+$$\mathbf{C} = \text{hist2d}\!\left(\{(I_n,\, Q_n)\}_{n=1}^{N}\right) \in \mathbb{R}^{H \times W}$$
 
 The histogram is normalized to unit sum and treated as a single-channel image of size $H \times W$. This representation captures symbol clustering, phase noise spreading, and amplitude distortion as spatial patterns in IQ space.
 
