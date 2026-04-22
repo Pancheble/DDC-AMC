@@ -62,7 +62,7 @@ $N$개의 샘플로 구성된 수신 복소 기저대역 신호를 $x(t) = I(t) 
 **컨스텔레이션 다이어그램.**
 복소 IQ 샘플을 IQ 평면에서 2차원 히스토그램으로 렌더링한다:
 
-$$\mathbf{C} = \operatorname{hist2d}\!\left(\{(I_n,\, Q_n)\}_{n=1}^{N}\right) \in \mathbb{R}^{H \times W}$$
+$$\mathbf{C} = \text{hist2d}\!\left(\{(I_n,\, Q_n)\}_{n=1}^{N}\right) \in \mathbb{R}^{H \times W}$$
 
 히스토그램은 합이 1이 되도록 정규화되며, $H \times W$ 크기의 단채널 이미지로 취급된다. 이 표현은 IQ 공간에서의 공간적 패턴으로서 심볼 클러스터링, 위상 잡음 확산, 진폭 왜곡을 포착한다.
 
