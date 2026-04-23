@@ -81,9 +81,9 @@ $$\mathbf{F}[k] = 10\log_{10}\!\left(|X[k]|^2\right) \in \mathbb{R}^{N/2}$$
 
 DDC-AMC는 동일한 수신 신호를 두 개의 병렬 브랜치에 통과시키며, 각 브랜치는 입력 도메인의 기하 구조에 맞게 설계된다.
 
-첫 번째 브랜치는 IQ 점 집합 $\mathbf{C} \in \mathbb{R}^{N \times 2}$를 처리한다. 성상도의 정체성은 심볼 도착 순서가 아니라 점유된 IQ 위치 집합에 의해 결정되므로, 인코더 $f_C$는 순열 불변이어야 한다. 이에 따라 본 연구는 attention 기반 pooling을 적용하는 Set Transformer를 채택하여, 입력 점의 순서와 무관하게 고정 길이 특징 벡터 $\mathbf{h}_C \in \mathbb{R}^{\text{embed\_dim}}$를 산출한다.
+첫 번째 브랜치는 IQ 점 집합 $\mathbf{C} \in \mathbb{R}^{N \times 2}$를 처리한다. 성상도의 정체성은 심볼 도착 순서가 아니라 점유된 IQ 위치 집합에 의해 결정되므로, 인코더 $f_C$는 순열 불변이어야 한다. 이에 따라 본 연구는 attention 기반 pooling을 적용하는 Set Transformer를 채택하여, 입력 점의 순서와 무관하게 고정 길이 특징 벡터 $\mathbf{h}_C \in \mathbb{R}^{\mathbb{embed\_dim}}$를 산출한다.
 
-두 번째 브랜치는 FFT 전력 스펙트럼 $\mathbf{F} \in \mathbb{R}^{N/2}$를 처리한다. IQ 점 집합과 달리 스펙트럼은 각 bin의 위치가 물리적 의미를 가지는 순서화된 시퀀스이다. 따라서 순열 불변성을 적용하면 이러한 구조가 소실된다. 이에 따라 인코더 $f_F$는 전역 평균 풀링을 포함한 1D CNN으로 구성하며, 합성곱 수용영역을 통해 주파수축의 국소성을 보존한 채 특징 벡터 $\mathbf{h}_F \in \mathbb{R}^{\text{embed\_dim}}$를 생성한다.
+두 번째 브랜치는 FFT 전력 스펙트럼 $\mathbf{F} \in \mathbb{R}^{N/2}$를 처리한다. IQ 점 집합과 달리 스펙트럼은 각 bin의 위치가 물리적 의미를 가지는 순서화된 시퀀스이다. 따라서 순열 불변성을 적용하면 이러한 구조가 소실된다. 이에 따라 인코더 $f_F$는 전역 평균 풀링을 포함한 1D CNN으로 구성하며, 합성곱 수용영역을 통해 주파수축의 국소성을 보존한 채 특징 벡터 $\mathbf{h}_F \in \mathbb{R}^{\mathbb{embed\_dim}}$를 생성한다.
 
 각 특징 벡터는 별도의 projection head, 즉 $g_C(\cdot)$와 $g_F(\cdot)$를 거치며, 이는 공유 $d$차원 공간으로 사상하는 2층 MLP로 구현된다. 출력은 $\ell_2$ 정규화되어 단위 노름 임베딩 $\mathbf{z}_C \in \mathbb{R}^d$와 $\mathbf{z}_F \in \mathbb{R}^d$를 형성한다.
 
