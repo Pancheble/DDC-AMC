@@ -1,4 +1,4 @@
-# DDC-AMC: 이중 도메인 대조 학습 기반 자동 변조 분류
+# DDC-AMC: Dual-Domain Contrastive Learning for Automatic Modulation Classification
 
 **[English](README.md) | [Korean](README.ko.md)**
 
