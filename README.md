@@ -8,7 +8,7 @@
 
 Automatic Modulation Classification (AMC) is a core problem in cognitive radio and spectrum monitoring, where the objective is to identify the modulation scheme of a received signal without prior knowledge of the transmitter. Most deep learning approaches rely on a single signal representation — such as raw IQ samples, a Constellation Diagram, or an FFT Spectrum — and therefore fail to fully exploit the complementary information available across domains.
 
-We propose **Dual-Domain Contrastive AMC (DDC-AMC)**, a framework that encodes two physically grounded representations of the same received signal — the Constellation Diagram and the FFT Power Spectrum — and aligns them in a shared embedding space using a CLIP-style symmetric contrastive objective. Because both views are deterministically derived from the same waveform, they form exact positive pairs for contrastive learning. The Constellation encoder captures phase-amplitude clustering in IQ space, while the FFT encoder captures spectral energy distribution in the frequency domain; these representations respond differently to channel distortions, making their alignment useful for robust AMC. A classification head then predicts the modulation class from the element-wise average of the two $\ell_2$-normalized projected embeddings.
+We propose **Dual-Domain Contrastive AMC (DDC-AMC)**, a framework that encodes two physically grounded representations of the same received signal — the IQ point set and the FFT Power Spectrum — and aligns them in a shared embedding space using a CLIP-style symmetric contrastive objective. Because both views are deterministically derived from the same waveform, they form exact positive pairs for contrastive learning. The IQ point set encoder, a Set Transformer, captures phase-amplitude geometry directly from raw IQ coordinates without any rendering or binning; the FFT encoder, a 1D CNN, captures spectral energy distribution in the frequency domain. These representations respond differently to channel distortions, making their alignment useful for robust AMC. A classification head then predicts the modulation class from the element-wise average of the two $\ell_2$-normalized projected embeddings.
 
 On the RadioML 2018.01A benchmark, DDC-AMC improves over single-domain baselines, with larger gains at low SNR and under mixed distortion conditions such as concurrent phase noise and frequency offset.
 
@@ -26,12 +26,12 @@ where $\hat{m}$ is the predicted modulation class. While effective under favorab
 
 This motivates a multi-view formulation: instead of committing to a single representation, we align complementary views of the same signal in a shared embedding space. CLIP (Radford et al., 2021) demonstrated that contrastive alignment across very different modalities can produce strong and transferable representations. In our setting, the two views are deterministic projections of the same physical waveform, which makes the alignment problem more principled and exact than the image-text case.
 
-We ask: **can contrastive alignment between Constellation and FFT representations produce AMC features that are simultaneously robust to distortions affecting either domain independently?**
+We ask: **can contrastive alignment between an IQ point set encoder and an FFT encoder produce AMC features that are simultaneously robust to distortions affecting either domain independently?**
 
 Our contributions are:
 
-1. We propose **DDC-AMC**, the first CLIP-style cross-domain contrastive framework for AMC that aligns Constellation Diagram and FFT Power Spectrum encoders in a shared embedding space, without any external pretrained encoder.
-2. We formalize same-signal $(C_i, F_i)$ pairs as exact positive pairs for contrastive learning, grounded in the physical relationship between the IQ and frequency domains.
+1. We propose **DDC-AMC**, the first CLIP-style cross-domain contrastive framework for AMC that aligns a permutation-invariant IQ point set encoder and an FFT Power Spectrum encoder in a shared embedding space, without any external pretrained encoder.
+2. We formalize same-signal $(C_i, F_i)$ pairs — where $C_i$ is a raw IQ point set and $F_i$ is its corresponding FFT spectrum — as exact positive pairs for contrastive learning, grounded in the physical relationship between the IQ and frequency domains.
 3. We introduce a dual-loss objective that jointly optimizes cross-domain alignment and supervised modulation classification in a single training loop.
 4. We design a distortion-specific evaluation protocol and show that the dual-domain model recovers performance in conditions where each single-domain baseline individually degrades.
 
@@ -59,15 +59,15 @@ Contrastive learning methods — including MoCo (He et al., 2020), SimCLR (Chen 
 
 Let $x(t) = I(t) + jQ(t)$ denote a received complex baseband signal consisting of $N$ samples. For each signal, we derive two fixed representations.
 
-**Constellation Diagram.**
-The complex IQ samples are rendered as a 2D histogram in the IQ plane:
+**IQ Point Set (Constellation Domain).**
+The complex IQ samples are treated directly as an unordered set of two-dimensional coordinates:
 
-$$\mathbf{C} = \text{hist2d}\!\left(\{(I_n,\, Q_n)\}_{n=1}^{N}\right) \in \mathbb{R}^{H \times W}$$
+$$\mathbf{C} = \{(I_n,\, Q_n)\}_{n=1}^{N} \in \mathbb{R}^{N \times 2}$$
 
-The histogram is normalized to unit sum and treated as a single-channel image of size $H \times W$. This representation captures symbol clustering, phase noise spreading, and amplitude distortion as spatial patterns in IQ space.
+No rendering or binning is applied. This representation preserves the exact phase-amplitude geometry of each received symbol, capturing symbol clustering, phase noise spreading, and amplitude distortion without quantization loss. Because the identity of a constellation is fully determined by the set of occupied IQ positions — not by the order in which symbols arrive — the representation is treated as a permutation-invariant point set.
 
 **FFT Power Spectrum.**
-We apply a Hanning window $w[n]$ to the signal before computing the discrete Fourier transform:
+We apply a Hann window $w[n]$ to the signal before computing the discrete Fourier transform:
 
 $$X[k] = \sum_{n=0}^{N-1} x[n]\cdot w[n]\cdot e^{-j2\pi kn/N}, \quad k = 0,\ldots,N-1$$
 
@@ -79,23 +79,25 @@ This representation captures spectral occupancy, carrier frequency offset, and h
 
 ### 3.2 Dual-Domain Contrastive Framework
 
-Figure 1 illustrates the overall architecture of DDC-AMC. The model takes two derived representations of the same received signal — the Constellation Diagram $\mathbf{C}$ and the FFT Power Spectrum $\mathbf{F}$ — as separate inputs. These are processed by domain-specific encoders: $f_C$, a 2D CNN (ResNet-18) for the Constellation Diagram, and $f_F$, a 1D CNN for the FFT Spectrum. Each encoder produces a feature vector, which is then mapped by a projection head into a shared $d$-dimensional embedding space.
+DDC-AMC processes the same received signal through two parallel branches, each designed to match the geometric structure of its input domain.
 
-![Figure 1: Overview of the DDC-AMC Framework.](figure\Figure_1.png)
+The first branch handles the IQ point set $\mathbf{C} \in \mathbb{R}^{N \times 2}$. Because the identity of a constellation is determined by the set of occupied IQ positions and not by the temporal order of symbol arrival, the encoder $f_C$ must be permutation-invariant. We therefore adopt a Set Transformer, which applies attention-based pooling over the $N$ input points and produces a fixed-length feature vector $\mathbf{h}_C \in \mathbb{R}^{\text{embed\_dim}}$ regardless of point ordering.
 
-*Figure 1: Overview of the DDC-AMC framework. The Constellation Diagram $\mathbf{C}$ and FFT Power Spectrum $\mathbf{F}$ are encoded by domain-specific encoders and projected into a shared embedding space. A CLIP-style contrastive loss aligns same-signal pairs, and a classification head predicts the modulation class from the averaged fused embedding.*
+The second branch handles the FFT Power Spectrum $\mathbf{F} \in \mathbb{R}^{N/2}$. Unlike the IQ point set, the spectrum is an ordered sequence in which the position of each bin carries physical meaning — bin index directly encodes frequency. Permutation invariance would destroy this structure. The encoder $f_F$ is therefore a 1D CNN with global average pooling, which preserves frequency-axis locality through its convolutional receptive fields and produces a feature vector $\mathbf{h}_F \in \mathbb{R}^{\text{embed\_dim}}$.
 
-Let $g_C(\cdot)$ and $g_F(\cdot)$ denote the projection heads for each domain. Their outputs are $\ell_2$-normalized embeddings $\mathbf{z}_C \in \mathbb{R}^d$ and $\mathbf{z}_F \in \mathbb{R}^d$. The model is trained jointly with two objectives: (i) a CLIP-style symmetric contrastive loss that aligns same-signal pairs $(C_i, F_i)$ and pushes apart mismatched pairs within the batch; and (ii) a supervised classification loss applied to the fused embedding
+Each feature vector is passed through an independent projection head — $g_C(\cdot)$ and $g_F(\cdot)$ respectively — implemented as two-layer MLPs mapping to a shared $d$-dimensional space. The outputs are $\ell_2$-normalized to produce unit-norm embeddings $\mathbf{z}_C \in \mathbb{R}^d$ and $\mathbf{z}_F \in \mathbb{R}^d$.
+
+The model is then trained jointly with two objectives. First, a CLIP-style symmetric contrastive loss aligns same-signal pairs $(\mathbf{C}_i, \mathbf{F}_i)$ in the shared embedding space and pushes apart mismatched pairs within the batch. Second, the two embeddings are fused by element-wise averaging,
 
 $$\mathbf{z}_{\text{fused}} = \frac{\mathbf{z}_C + \mathbf{z}_F}{2}$$
 
-passed through a classification head $h(\cdot)$. This design keeps the representation alignment objective and the downstream classification objective tightly coupled throughout training.
+and passed through a classification head $h(\cdot)$ to predict the modulation class. This design keeps the representation alignment objective and the downstream classification objective tightly coupled throughout training.
 
 ### 3.3 Positive Pair Construction
 
-For a batch of $B$ signals $\{x_i\}_{i=1}^{B}$, we extract the corresponding pairs $\{(\mathbf{C}_i, \mathbf{F}_i)\}_{i=1}^{B}$. We define:
+For a batch of $B$ signals $\{x_i\}_{i=1}^{B}$, we extract the corresponding pairs $\{(\mathbf{C}_i, \mathbf{F}_i)\}_{i=1}^{B}$, where $\mathbf{C}_i \in \mathbb{R}^{N \times 2}$ is the IQ point set and $\mathbf{F}_i \in \mathbb{R}^{N/2}$ is the FFT power spectrum of signal $x_i$. We define:
 
-- **Positive pair:** $(\mathbf{C}_i, \mathbf{F}_i)$ — the Constellation and FFT representations of the same signal $x_i$.
+- **Positive pair:** $(\mathbf{C}_i, \mathbf{F}_i)$ — the IQ point set and FFT representations of the same signal $x_i$.
 - **Negative pairs:** $(\mathbf{C}_i, \mathbf{F}_j)$ for all $j \neq i$ within the batch.
 
 This pairing is exact and requires no augmentation policy or separate mining strategy: the positive correspondence is fully determined by the identity of the source signal.
@@ -119,7 +121,7 @@ $$\mathcal{L}_{\text{contra}} = -\frac{1}{2B} \sum_{i=1}^{B}
 \log \frac{e^{S_{ii}}}{\sum_{j=1}^{B} e^{S_{ji}}}
 \right]$$
 
-The first term trains each Constellation embedding to retrieve its paired FFT embedding; the second term does the reverse.
+The first term trains each IQ point set embedding to retrieve its paired FFT embedding; the second term does the reverse.
 
 ### 3.5 Classification Objective
 
@@ -149,11 +151,11 @@ We summarize the full DDC-AMC pipeline in pseudocode. The procedure covers signa
 // ─────────────────────────────────────────────────────────────
 // Notation
 //   B          : batch size
-//   x          : raw IQ signal,  shape (B, N)       [complex]
-//   C          : Constellation Diagram, shape (B, 1, H, W)
-//   F_spec     : FFT Power Spectrum,    shape (B, N/2)
-//   h_C, h_F   : encoder feature vectors,  shape (B, embed_dim)
-//   z_C, z_F   : ℓ₂-normalized projected embeddings, shape (B, d)
+//   x          : raw IQ signal,              shape (B, N)    [complex]
+//   C          : IQ point set,               shape (B, N, 2)
+//   F_spec     : FFT Power Spectrum,         shape (B, N/2)
+//   h_C, h_F   : encoder feature vectors,   shape (B, embed_dim)
+//   z_C, z_F   : ℓ₂-normalized embeddings, shape (B, d)
 //   z_fused    : averaged fused embedding,  shape (B, d)
 //   S          : cosine similarity matrix,  shape (B, B)
 //   τ          : learnable temperature scalar
@@ -164,13 +166,14 @@ PROCEDURE DDC_AMC_TrainingStep(batch_x, batch_y, model, optimizer, λ):
 
     // ── 1. Signal Preprocessing ──────────────────────────────
     FOR EACH signal x IN batch_x:
-        C      ← hist2d(Re(x), Im(x))          // 2D IQ histogram → (1, H, W) image
-        C      ← normalize(C, mode=unit_sum)    // normalize to unit sum
-        F_spec ← 10 · log10(|FFT(x · Hanning)|²)  // log-scale one-sided PSD → (N/2,)
+        C      ← stack(Re(x), Im(x), axis=-1)       // IQ coordinates → (N, 2)
+        F_spec ← 10 · log10(|FFT(x · Hanning)|²)    // log-scale one-sided PSD → (N/2,)
 
     // ── 2. Encoder Forward Pass ───────────────────────────────
-    h_C ← Encoder_C(C)            // 2D CNN (ResNet-18),  output: (B, embed_dim)
-    h_F ← Encoder_F(F_spec)       // 1D CNN + GlobalAvgPool, output: (B, embed_dim)
+    h_C ← Encoder_C(C)            // Set Transformer (permutation-invariant)
+                                   //   input: (B, N, 2) → output: (B, embed_dim)
+    h_F ← Encoder_F(F_spec)       // 1D CNN + GlobalAvgPool
+                                   //   input: (B, N/2)  → output: (B, embed_dim)
 
     // ── 3. Projection & L2 Normalization ─────────────────────
     z_C ← L2_normalize( MLP_C(h_C) )    // Projection head g_C → (B, d)
@@ -212,18 +215,17 @@ PROCEDURE DDC_AMC_TrainingStep(batch_x, batch_y, model, optimizer, λ):
 
 PROCEDURE DDC_AMC_Inference(x, model):
 
-    C      ← hist2d(Re(x), Im(x))
-    C      ← normalize(C, mode=unit_sum)
-    F_spec ← 10 · log10(|FFT(x · Hanning)|²)
+    C      ← stack(Re(x), Im(x), axis=-1)           // (N, 2)
+    F_spec ← 10 · log10(|FFT(x · Hanning)|²)        // (N/2,)
 
-    h_C ← Encoder_C(C)
-    h_F ← Encoder_F(F_spec)
+    h_C ← Encoder_C(C)                              // Set Transformer
+    h_F ← Encoder_F(F_spec)                         // 1D CNN
 
     z_C ← L2_normalize( MLP_C(h_C) )
     z_F ← L2_normalize( MLP_F(h_F) )
 
     z_fused  ← (z_C + z_F) / 2
-    ŷ        ← argmax( Classifier(z_fused) )     // predicted modulation class
+    ŷ        ← argmax( Classifier(z_fused) )         // predicted modulation class
 
     RETURN ŷ
 ```
@@ -232,24 +234,24 @@ PROCEDURE DDC_AMC_Inference(x, model):
 
 ## References
 
-[1] O'Shea, T. J., & West, N. (2016). Radio machine learning dataset generation with GNU radio. *Proceedings of the GNU Radio Conference*.
+[1] O'Shea, T. J., & West, N. (2016). Radio Machine Learning Dataset Generation with GNU Radio. *Proceedings of the 6th GNU Radio Conference*, Vol. 1, No. 1.
 
-[2] West, N., & O'Shea, T. (2017). Deep architectures for modulation recognition. *IEEE DySPAN 2017*.
+[2] West, N. E., & O'Shea, T. J. (2017). Deep Architectures for Modulation Recognition. *Proceedings of the 2017 IEEE International Symposium on Dynamic Spectrum Access Networks (DySPAN)*.
 
-[3] Rajendran, S., Meert, W., Giustiniano, D., Lenders, V., & Pollin, S. (2018). Deep learning models for wireless signal classification with distributed low-cost spectrum sensors. *IEEE Transactions on Cognitive Communications and Networking, 4*(3), 433–445.
+[3] Rajendran, S., Meert, W., Giustiniano, D., Lenders, V., & Pollin, S. (2018). Deep Learning Models for Wireless Signal Classification with Distributed Low-Cost Spectrum Sensors. *IEEE Transactions on Cognitive Communications and Networking, 4*(3), 433–445.
 
-[4] Liu, X., Yang, D., & El Gamal, A. (2017). Deep neural network architectures for modulation classification. *Asilomar Conference on Signals, Systems, and Computers*.
+[4] Liu, X., Yang, D., & El Gamal, A. (2017). Deep Neural Network Architectures for Modulation Classification. *Proceedings of the 51st Asilomar Conference on Signals, Systems, and Computers (ACSSC)*.
 
-[5] Radford, A., Kim, J. W., Hallacy, C., et al. (2021). Learning transferable visual models from natural language supervision. *ICML 2021*. (CLIP)
+[5] Radford, A., Kim, J. W., Hallacy, C., et al. (2021). Learning Transferable Visual Models From Natural Language Supervision. *arXiv preprint arXiv:2103.00020*.
 
-[6] He, K., Fan, H., Wu, Y., Xie, S., & Girshick, R. (2020). Momentum contrast for unsupervised visual representation learning. *CVPR 2020*. (MoCo)
+[6] He, K., Fan, H., Wu, Y., Xie, S., & Girshick, R. (2020). Momentum Contrast for Unsupervised Visual Representation Learning. *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)*, 9726–9735.
 
-[7] Chen, T., Kornblith, S., Norouzi, M., & Hinton, G. (2020). A simple framework for contrastive learning of visual representations. *ICML 2020*. (SimCLR)
+[7] Chen, T., Kornblith, S., Norouzi, M., & Hinton, G. (2020). A Simple Framework for Contrastive Learning of Visual Representations. *Proceedings of the 37th International Conference on Machine Learning (ICML)*.
 
-[8] Grill, J. B., Strub, F., Altché, F., et al. (2020). Bootstrap your own latent: A new approach to self-supervised learning. *NeurIPS 2020*. (BYOL)
+[8] Grill, J.-B., Strub, F., Altché, F., et al. (2020). Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning. *Advances in Neural Information Processing Systems (NeurIPS)*.
 
-[9] Caron, M., Touvron, H., Misra, I., et al. (2021). Emerging properties in self-supervised vision transformers. *ICCV 2021*. (DINO)
+[9] Lee, J., Lee, Y., Kim, J., Kosiorek, A. R., Choi, S., & Teh, Y. W. (2019). Set Transformer: A Framework for Attention-based Permutation-Invariant Neural Networks. *Proceedings of the 36th International Conference on Machine Learning (ICML)*, PMLR 97, 3744–3753.
 
-[10] DeepSig Inc. (2018). RadioML 2018.01A Dataset. https://www.deepsig.ai/datasets
+[10] DeepSig. RadioML 2018.01A Dataset. Available from the official DeepSig datasets page.
 
-[11] Schmidl, T. M., & Cox, D. C. (1997). Robust frequency and timing synchronization for OFDM. *IEEE Transactions on Communications, 45*(12), 1613–1621.
+[11] Schmidl, T. M., & Cox, D. C. (1997). Robust Frequency and Timing Synchronization for OFDM. *IEEE Transactions on Communications, 45*(12), 1613–1621.
