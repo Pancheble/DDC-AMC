@@ -6,11 +6,11 @@
 
 ## Abstract
 
-Automatic Modulation Classification (AMC) is a core problem in cognitive radio and spectrum monitoring, where the objective is to identify the modulation scheme of a received signal without prior knowledge of the transmitter. Most deep learning approaches rely on a single signal representation — such as raw IQ samples, a Constellation Diagram, or an FFT Spectrum — and therefore fail to fully exploit the complementary information available across domains.
+Automatic Modulation Classification (AMC) is a core problem in cognitive radio and spectrum monitoring, where the objective is to identify the modulation scheme of a received signal without prior knowledge of the transmitter. Most deep learning approaches rely on a single signal representation — such as raw IQ samples, a Constellation Diagram, or an FFT Spectrum — and therefore do not fully exploit the complementary information available across domains.
 
-We propose **Dual-Domain Contrastive AMC (DDC-AMC)**, a framework that encodes two physically grounded representations of the same received signal — the IQ point set and the FFT Power Spectrum — and aligns them in a shared embedding space using a CLIP-style symmetric contrastive objective. Because both views are deterministically derived from the same waveform, they form exact positive pairs for contrastive learning. The IQ point set encoder, a Set Transformer, captures phase-amplitude geometry directly from raw IQ coordinates without any rendering or binning; the FFT encoder, a 1D CNN, captures spectral energy distribution in the frequency domain. These representations respond differently to channel distortions, making their alignment useful for robust AMC. A classification head then predicts the modulation class from the element-wise average of the two $\ell_2$-normalized projected embeddings.
+We propose **Dual-Domain Contrastive AMC (DDC-AMC)**, a framework that is designed to encode two physically grounded representations of the same received signal — the IQ point set and the FFT Power Spectrum — and to align them in a shared embedding space using a CLIP-style symmetric contrastive objective. Because both views are deterministically derived from the same waveform, they form exact positive pairs for contrastive learning. The IQ point set encoder, a Set Transformer, is intended to capture phase-amplitude geometry directly from raw IQ coordinates without any rendering or binning; the FFT encoder, a 1D CNN, is intended to capture spectral energy distribution in the frequency domain. These representations respond differently to channel distortions, so their alignment is designed to support more robust AMC. A classification head then predicts the modulation class from the element-wise average of the two $\ell_2$-normalized projected embeddings.
 
-On the RadioML 2018.01A benchmark, DDC-AMC improves over single-domain baselines, with larger gains at low SNR and under mixed distortion conditions such as concurrent phase noise and frequency offset.
+The proposed framework is intended to be evaluated on the RadioML 2018.01A benchmark, with a focus on low-SNR settings and mixed distortion conditions such as concurrent phase noise and frequency offset.
 
 ---
 
@@ -26,14 +26,14 @@ where $\hat{m}$ is the predicted modulation class. While effective under favorab
 
 This motivates a multi-view formulation: instead of committing to a single representation, we align complementary views of the same signal in a shared embedding space. CLIP (Radford et al., 2021) demonstrated that contrastive alignment across very different modalities can produce strong and transferable representations. In our setting, the two views are deterministic projections of the same physical waveform, which makes the alignment problem more principled and exact than the image-text case.
 
-We ask: **can contrastive alignment between an IQ point set encoder and an FFT encoder produce AMC features that are simultaneously robust to distortions affecting either domain independently?**
+We therefore ask: **can contrastive alignment between an IQ point set encoder and an FFT encoder be used to build AMC features that are intended to remain stable under distortions affecting either domain independently?**
 
-Our contributions are:
+Our contributions are framed as follows:
 
-1. We propose **DDC-AMC**, the first CLIP-style cross-domain contrastive framework for AMC that aligns a permutation-invariant IQ point set encoder and an FFT Power Spectrum encoder in a shared embedding space, without any external pretrained encoder.
-2. We formalize same-signal $(C_i, F_i)$ pairs — where $C_i$ is a raw IQ point set and $F_i$ is its corresponding FFT spectrum — as exact positive pairs for contrastive learning, grounded in the physical relationship between the IQ and frequency domains.
-3. We introduce a dual-loss objective that jointly optimizes cross-domain alignment and supervised modulation classification in a single training loop.
-4. We design a distortion-specific evaluation protocol and show that the dual-domain model recovers performance in conditions where each single-domain baseline individually degrades.
+1. We propose **DDC-AMC**, a CLIP-style cross-domain contrastive framework for AMC that is intended to align a permutation-invariant IQ point set encoder and an FFT Power Spectrum encoder in a shared embedding space, without relying on an external pretrained encoder.
+2. We formalize same-signal $(C_i, F_i)$ pairs — where $C_i$ is a raw IQ point set and $F_i$ is its corresponding FFT spectrum — as exact positive pairs for contrastive learning, based on the physical relationship between the IQ and frequency domains.
+3. We introduce a dual-loss objective that is intended to jointly optimize cross-domain alignment and supervised modulation classification in a single training loop.
+4. We define an evaluation protocol focused on distortion-specific conditions, with the aim of examining whether dual-domain modeling can better preserve classification behavior when each single-domain baseline becomes less reliable.
 
 ---
 
@@ -45,11 +45,11 @@ The release of the RadioML dataset (O'Shea & West, 2016) catalyzed deep learning
 
 ### 2.2 Multi-Representation Signal Classification
 
-Related ideas have appeared in audio classification, where joint modeling of MFCCs and spectrograms has improved robustness, and in radar signal processing, where range-Doppler and micro-Doppler features are fused for waveform identification. In AMC specifically, some studies concatenate IQ-derived features or combine multiple views through late fusion. However, these approaches treat the views as independent feature sources and do not enforce any geometric alignment between their latent spaces during training.
+Related ideas have appeared in audio classification, where joint modeling of MFCCs and spectrograms has improved robustness, and in radar signal processing, where range-Doppler and micro-Doppler features are fused for waveform identification. In AMC specifically, some studies concatenate IQ-derived features or combine multiple views through late fusion. However, these approaches usually treat the views as independent feature sources and do not enforce geometric alignment between their latent spaces during training.
 
 ### 2.3 Contrastive and Multi-Modal Representation Learning
 
-Contrastive learning methods — including MoCo (He et al., 2020), SimCLR (Chen et al., 2020), and BYOL (Grill et al., 2020) — established that strong visual representations can be learned by training a model to be invariant to augmentations of the same image. CLIP (Radford et al., 2021) extended this paradigm across modalities, aligning image and text embeddings with a symmetric cross-entropy contrastive loss over paired samples. Our work applies the same alignment principle to communication signals, where the paired views are physically meaningful and mathematically related transformations of the same received waveform, making the contrastive task cleaner and more tractable than the original image-text setting.
+Contrastive learning methods — including MoCo (He et al., 2020), SimCLR (Chen et al., 2020), and BYOL (Grill et al., 2020) — established that strong visual representations can be learned by training a model to be invariant to augmentations of the same image. CLIP (Radford et al., 2021) extended this paradigm across modalities, aligning image and text embeddings with a symmetric cross-entropy contrastive loss over paired samples. Our work adapts the same alignment principle to communication signals, where the paired views are physically meaningful and mathematically related transformations of the same received waveform, making the contrastive task cleaner and more tractable than the original image-text setting.
 
 ---
 
@@ -79,15 +79,15 @@ This representation captures spectral occupancy, carrier frequency offset, and h
 
 ### 3.2 Dual-Domain Contrastive Framework
 
-DDC-AMC processes the same received signal through two parallel branches, each designed to match the geometric structure of its input domain.
+DDC-AMC processes the same received signal through two parallel branches, each intended to match the geometric structure of its input domain.
 
-The first branch handles the IQ point set $\mathbf{C} \in \mathbb{R}^{N \times 2}$. Because the identity of a constellation is determined by the set of occupied IQ positions and not by the temporal order of symbol arrival, the encoder $f_C$ must be permutation-invariant. We therefore adopt a Set Transformer, which applies attention-based pooling over the $N$ input points and produces a fixed-length feature vector $\mathbf{h}_C \in \mathbb{R}^{\mathrm{embed\_dim}}$ regardless of point ordering.
+The first branch handles the IQ point set $\mathbf{C} \in \mathbb{R}^{N \times 2}$. Because the identity of a constellation is determined by the set of occupied IQ positions and not by the temporal order of symbol arrival, the encoder $f_C$ is chosen to be permutation-invariant. We therefore adopt a Set Transformer, which applies attention-based pooling over the $N$ input points and produces a fixed-length feature vector $\mathbf{h}_C \in \mathbb{R}^{\mathrm{embed\_dim}}$ regardless of point ordering.
 
 The second branch handles the FFT power spectrum $\mathbf{F} \in \mathbb{R}^{N/2}$. Unlike the IQ point set, the spectrum is an ordered sequence in which the position of each bin carries physical meaning — bin index directly encodes frequency. Permutation invariance would destroy this structure. The encoder $f_F$ is therefore a 1D CNN with global average pooling, which preserves frequency-axis locality through its convolutional receptive fields and produces a feature vector $\mathbf{h}_F \in \mathbb{R}^{\mathrm{embed\_dim}}$.
 
 Each feature vector is passed through an independent projection head — $g_C(\cdot)$ and $g_F(\cdot)$ respectively — implemented as two-layer MLPs mapping to a shared $d$-dimensional space. The outputs are $\ell_2$-normalized to produce unit-norm embeddings $\mathbf{z}_C \in \mathbb{R}^d$ and $\mathbf{z}_F \in \mathbb{R}^d$.
 
-The model is then trained jointly with two objectives. First, a CLIP-style symmetric contrastive loss aligns same-signal pairs $(\mathbf{C}_i, \mathbf{F}_i)$ in the shared embedding space and pushes apart mismatched pairs within the batch. Second, the two embeddings are fused by element-wise averaging,
+The model is trained jointly with two objectives. First, a CLIP-style symmetric contrastive loss aligns same-signal pairs $(\mathbf{C}_i, \mathbf{F}_i)$ in the shared embedding space and pushes apart mismatched pairs within the batch. Second, the two embeddings are fused by element-wise averaging,
 
 $$\mathbf{z}_{\text{fused}} = \frac{\mathbf{z}_C + \mathbf{z}_F}{2}$$
 
